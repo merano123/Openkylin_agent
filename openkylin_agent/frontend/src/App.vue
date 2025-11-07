@@ -24,7 +24,7 @@ import { ref } from 'vue'
 import axios from 'axios'
 
 // 后端 FastAPI 地址
-const API_URL = 'http://192.168.159.128:8080/chat'
+const API_URL = 'http://localhost:8080/chat'
 
 const input = ref('')
 const messages = ref([])

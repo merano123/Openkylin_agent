@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -22,19 +22,11 @@ app.add_middleware(
 )
 
 # 初始化 Agent 实例
-
-# 先初始化子agent
+chat_agent = ChatAgent()
 planner_agent = PlannerAgent()
 executor_agent = ExecutorAgent()
 memory_agent = MemoryAgent()
 collaborate_agent = CollaborateAgent()
-# 主agent注入子agent
-chat_agent = ChatAgent(
-    planner_agent=planner_agent,
-    executor_agent=executor_agent,
-    memory_agent=memory_agent,
-    collaborate_agent=collaborate_agent
-)
 
 
 # 定义请求体模型
@@ -69,13 +61,37 @@ async def root():
     """测试接口"""
     return {"status": "ok", "message": "openKylin Multi-Agent backend running"}
 
-# 只保留 chat agent 统一入口
-@app.post("/api/agent")
-async def chat_entry(request: Request):
-    data = await request.json()
-    # 兼容前端传 agent_type 或 message 字段
-    message = data.get("message") or data.get("content") or data.get("text")
-    if not message:
-        return {"error": "缺少 message 字段"}
-    reply = chat_agent.reply(message)
+
+@app.post("/agent/chat")
+async def chat(req: ChatRequest):
+    """聊天接口"""
+    reply = chat_agent.reply(req.message)
     return {"agent": "chat", "reply": reply}
+
+
+@app.post("/agent/plan")
+async def plan(req: PlanRequest):
+    """任务规划接口"""
+    plan_steps = planner_agent.plan(req.goal)
+    return {"agent": "planner", "goal": req.goal, "steps": plan_steps}
+
+
+@app.post("/agent/execute")
+async def execute(req: ExecuteRequest):
+    """执行系统任务接口"""
+    result = executor_agent.execute(req.action, req.params)
+    return {"agent": "executor", "result": result}
+
+
+@app.post("/agent/memory")
+async def memory(req: MemoryRequest):
+    """记忆接口"""
+    result = memory_agent.handle(req.mode, req.data)
+    return {"agent": "memory", "mode": req.mode, "result": result}
+
+
+@app.post("/agent/collaborate")
+async def collaborate(req: CollaborateRequest):
+    """多智能体协作接口"""
+    result = collaborate_agent.communicate(req.sender, req.receiver, req.task)
+    return {"agent": "collaborate", "task": req.task, "result": result}

@@ -17,6 +17,14 @@ class ChatAgent:
         self.memory_agent = memory_agent
         self.collaborate_agent = collaborate_agent
 
+        # 确保存在可用的 MemoryAgent（若上层未注入则使用默认实现）
+        if self.memory_agent is None:
+            try:
+                from agents.test_memory_agent import MemoryAgent as DefaultMemoryAgent
+                self.memory_agent = DefaultMemoryAgent()
+            except Exception:
+                self.memory_agent = None
+
     def reply(self, user_input: str) -> str:
         """接收用户输入，自动分发到其他Agent或直接回复"""
         self.history.append({"role": "user", "content": user_input})
@@ -78,6 +86,15 @@ class ChatAgent:
                 ]
             )
             reply_text = response.choices[0].message.content.strip()
+
+        # 自动保存本轮对话到 MemoryAgent（满足“每段对话都记忆存储”的需求）
+        try:
+            if self.memory_agent is not None:
+                self.memory_agent.handle("save", {"session_id": "default", "role": "user", "content": user_input})
+                self.memory_agent.handle("save", {"session_id": "default", "role": "assistant", "content": reply_text})
+        except Exception:
+            # 自动保存失败不影响正常回复
+            pass
 
         self.history.append({"role": "assistant", "content": reply_text})
         return reply_text

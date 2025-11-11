@@ -51,7 +51,7 @@
 
 <script setup>
 const placeholderText = '输入您的问题...';
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted, watch } from 'vue'
 import axios from 'axios'
 
 const API_URL = 'http://localhost:8080/api/agent'
@@ -59,6 +59,52 @@ const input = ref('')
 const messages = ref([])
 const isLoading = ref(false)
 const chatBox = ref(null)
+const sessionId = ref('')
+
+// 生成唯一的会话 ID
+const generateSessionId = () => {
+  return 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9)
+}
+
+// 从 sessionStorage 恢复会话（刷新页面时恢复，关闭标签页后清除）
+const restoreSession = () => {
+  try {
+    const savedSessionId = sessionStorage.getItem('openkylin_session_id')
+    const savedMessages = sessionStorage.getItem('openkylin_messages')
+
+    if (savedSessionId && savedMessages) {
+      sessionId.value = savedSessionId
+      messages.value = JSON.parse(savedMessages)
+    } else {
+      // 没有保存的会话，创建新会话
+      sessionId.value = generateSessionId()
+      sessionStorage.setItem('openkylin_session_id', sessionId.value)
+    }
+  } catch (error) {
+    console.error('恢复会话失败:', error)
+    sessionId.value = generateSessionId()
+    sessionStorage.setItem('openkylin_session_id', sessionId.value)
+  }
+}
+
+// 保存消息到 sessionStorage
+const saveMessages = () => {
+  try {
+    sessionStorage.setItem('openkylin_messages', JSON.stringify(messages.value))
+  } catch (error) {
+    console.error('保存消息失败:', error)
+  }
+}
+
+// 监听消息变化，自动保存
+watch(messages, () => {
+  saveMessages()
+}, { deep: true })
+
+// 页面加载时恢复会话
+onMounted(() => {
+  restoreSession()
+})
 
 const scrollToBottom = () => {
   nextTick(() => {
@@ -70,7 +116,7 @@ const scrollToBottom = () => {
 
 const sendMessage = async () => {
   if (!input.value.trim() || isLoading.value) return
-  
+
   const userMsg = input.value
   messages.value.push({ role: '你', text: userMsg })
   input.value = ''
@@ -78,9 +124,13 @@ const sendMessage = async () => {
   scrollToBottom()
 
   try {
-    const res = await axios.post(API_URL, { message: userMsg })
+    const res = await axios.post(API_URL, {
+      message: userMsg,
+      session_id: sessionId.value
+    })
     messages.value.push({ role: 'Agent', text: res.data.reply })
   } catch (err) {
+    console.error('请求错误:', err)
     messages.value.push({ role: '系统', text: '❌ 请求失败，请检查后端是否在运行' })
   } finally {
     isLoading.value = false

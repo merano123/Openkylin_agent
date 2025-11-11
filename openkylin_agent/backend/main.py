@@ -75,7 +75,8 @@ async def chat_entry(request: Request):
     data = await request.json()
     # 兼容前端传 agent_type 或 message 字段
     message = data.get("message") or data.get("content") or data.get("text")
+    session_id = data.get("session_id", "default")  # 获取会话ID，默认为 "default"
     if not message:
         return {"error": "缺少 message 字段"}
-    reply = chat_agent.reply(message)
-    return {"agent": "chat", "reply": reply}
+    reply = chat_agent.reply(message, session_id)
+    return {"agent": "chat", "reply": reply, "session_id": session_id}

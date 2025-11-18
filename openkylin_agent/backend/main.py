@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import uuid
 
 # 导入多个 Agent 模块
 from agents.chat_agent import ChatAgent
@@ -71,12 +72,25 @@ async def root():
 
 # 只保留 chat agent 统一入口
 @app.post("/api/agent")
-async def chat_entry(request: Request):
+async def chat_entry(request: Request, response: Response):
     data = await request.json()
-    # 兼容前端传 agent_type 或 message 字段
     message = data.get("message") or data.get("content") or data.get("text")
-    session_id = data.get("session_id", "default")  # 获取会话ID，默认为 "default"
+    incoming_sid = data.get("session_id")
+    cookie_sid = request.cookies.get("ok_session_id")
+    session_id = incoming_sid or cookie_sid or uuid.uuid4().hex
+    if cookie_sid is None:
+        response.set_cookie(key="ok_session_id", value=session_id, max_age=31536000, path="/", samesite="lax")
     if not message:
         return {"error": "缺少 message 字段"}
     reply = chat_agent.reply(message, session_id)
     return {"agent": "chat", "reply": reply, "session_id": session_id}
+
+@app.post("/api/memory")
+async def memory_entry(req: MemoryRequest, request: Request, response: Response):
+    cookie_sid = request.cookies.get("ok_session_id")
+    data = dict(req.data or {})
+    session_id = data.get("session_id") or cookie_sid or uuid.uuid4().hex
+    if cookie_sid is None:
+        response.set_cookie(key="ok_session_id", value=session_id, max_age=31536000, path="/", samesite="lax")
+    data["session_id"] = session_id
+    return chat_agent.memory_entry(req.mode, data)

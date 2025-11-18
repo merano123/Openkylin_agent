@@ -39,6 +39,9 @@ class ChatAgent:
             except Exception:
                 self.memory_agent = None
 
+    def memory_entry(self, mode: str, data: dict):
+        return self.memory_agent.handle(mode, data)
+
     def _analyze_intent(self, user_input: str, history: list) -> dict:
         """
         使用 LLM 分析用户意图
@@ -273,7 +276,7 @@ class ChatAgent:
                 print(f"[ChatAgent] 调用 MemoryAgent: {query_type}")
 
                 if query_type == "recent" or query_type == "conversation":
-                    records = self.memory_agent.get_context(session_id, limit=10)
+                    records = self.memory_agent.get_context(None, limit=10)
                     reply_text = f"📜 最近的对话记录（共 {len(records)} 条）：\n"
                     for record in records[-5:]:  # 只显示最近5条
                         role = "我" if record["role"] == "user" else "助手"
@@ -283,7 +286,7 @@ class ChatAgent:
                         reply_text += f"\n{role}: {content}"
                 else:
                     # 关键词搜索
-                    records = self.memory_agent.search_context(session_id, query_type, limit=5)
+                    records = self.memory_agent.search_context(None, query_type, limit=5)
                     if records:
                         reply_text = f"🔍 搜索「{query_type}」的结果（共 {len(records)} 条）：\n"
                         for record in records:

@@ -77,37 +77,61 @@ class MemoryAgent:
         )
         self.conn.commit()
 
-    def get_context(self, session_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+    def get_context(self, session_id: Optional[str], limit: int = 20) -> List[Dict[str, Any]]:
         """返回最近的 `limit` 条消息，按时间正序（从旧到新）。"""
         cur = self.conn.cursor()
-        cur.execute(
-            """
-            SELECT role, content, ts FROM (
-                SELECT role, content, ts FROM conversations
-                WHERE session_id = ?
-                ORDER BY ts DESC
-                LIMIT ?
-            ) sub ORDER BY ts ASC
-            """,
-            (session_id, limit),
-        )
+        if session_id is None or session_id in {"*", "__global__", "all"}:
+            cur.execute(
+                """
+                SELECT role, content, ts FROM (
+                    SELECT role, content, ts FROM conversations
+                    ORDER BY ts DESC
+                    LIMIT ?
+                ) sub ORDER BY ts ASC
+                """,
+                (limit,),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT role, content, ts FROM (
+                    SELECT role, content, ts FROM conversations
+                    WHERE session_id = ?
+                    ORDER BY ts DESC
+                    LIMIT ?
+                ) sub ORDER BY ts ASC
+                """,
+                (session_id, limit),
+            )
         rows = cur.fetchall()
         return [{"role": r[0], "content": r[1], "ts": r[2]} for r in rows]
 
-    def search_context(self, session_id: str, keyword: str, limit: int = 20) -> List[Dict[str, Any]]:
+    def search_context(self, session_id: Optional[str], keyword: str, limit: int = 20) -> List[Dict[str, Any]]:
         """按关键词检索会话消息，返回最新匹配（按时间倒序）。"""
         cur = self.conn.cursor()
         like = f"%{keyword}%"
-        cur.execute(
-            """
-            SELECT role, content, ts
-            FROM conversations
-            WHERE session_id = ? AND content LIKE ?
-            ORDER BY ts DESC
-            LIMIT ?
-            """,
-            (session_id, like, limit),
-        )
+        if session_id is None or session_id in {"*", "__global__", "all"}:
+            cur.execute(
+                """
+                SELECT role, content, ts
+                FROM conversations
+                WHERE content LIKE ?
+                ORDER BY ts DESC
+                LIMIT ?
+                """,
+                (like, limit),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT role, content, ts
+                FROM conversations
+                WHERE session_id = ? AND content LIKE ?
+                ORDER BY ts DESC
+                LIMIT ?
+                """,
+                (session_id, like, limit),
+            )
         rows = cur.fetchall()
         return [{"role": r[0], "content": r[1], "ts": r[2]} for r in rows]
 
@@ -214,7 +238,8 @@ class MemoryAgent:
         # 按您的需求：每次调用前先输出一句话
         print("我是memory")
 
-        session_id = data.get("session_id", "default")
+        raw_sid = data.get("session_id")
+        session_id = None if raw_sid in (None, "*", "__global__", "all") else raw_sid
 
         if mode == "save":
             if "content" in data:  # 保存会话消息
